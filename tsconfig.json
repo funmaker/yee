@@ -10,7 +10,7 @@
             "es2023"
         ],
         "target": "es2017",
-        "module": "commonjs",
+        "module": "esnext",
         "moduleResolution": "node",
         "noImplicitAny": true,
         "noImplicitReturns": true,
@@ -25,5 +25,10 @@
         "resolveJsonModule": true,
         "experimentalDecorators": true,
         "downlevelIteration": true
+    },
+    "ts-node": {
+        "files": true,
+        "esm": true,
+        "experimentalSpecifierResolution": "node"
     }
 }

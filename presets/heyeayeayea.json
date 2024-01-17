@@ -1,0 +1,21 @@
+{
+    "name": "HEYEAYEAYEA!",
+    "description": "u u uwa uwa",
+    "author": "Fun Maker",
+    "steps": [
+        { "scene": true, "color": "#ff3300", "brightness": 1 },
+        { "brightness": 100, "duration": 2500 },
+        { "mpv": "https://www.youtube.com/watch?v=662JyNLVpxE" },
+        { "sleep": 3000 },
+        { "flow": [
+            [200, "#FF0000", 100],
+            [200, "#FFFF00", 100],
+            [200, "#00FF00", 100],
+            [200, "#00FFFF", 100],
+            [200, "#0000FF", 100],
+            [200, "#FF00FF", 100]
+        ] },
+        { "mpv": "wait" },
+        { "preset": "aurora" }
+    ]
+}

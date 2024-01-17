@@ -1,0 +1,27 @@
+{
+    "name": "Caramelldansen",
+    "description": "u u uwa uwa",
+    "author": "Fun Maker",
+    "steps": [
+        { "scene": true, "color": "#ff3300", "brightness": 1 },
+        { "brightness": 100, "duration": 3000 },
+        { "mpv": "https://www.youtube.com/watch?v=SeMXa5lBGYc" },
+        { "sleep": 16000 },
+        { "flow": [
+            [50, "#FF0000", 100],
+            [314],
+            [50, "#0077FF", 100],
+            [314],
+            [50, "#FFFF00", 100],
+            [314],
+            [50, "#0000FF", 100],
+            [314],
+            [50, "#FF00FF", 100],
+            [314],
+            [50, "#00FF00", 100],
+            [314]
+        ] },
+        { "mpv": "wait" },
+        { "preset": "aurora" }
+    ]
+}

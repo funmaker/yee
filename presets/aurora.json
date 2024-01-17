@@ -1,0 +1,15 @@
+{
+    "name": "Aurora",
+    "description": "Blue-green-ish color flow",
+    "author": "Fun Maker",
+    "steps": [
+        { "power": "on" },
+        { "flow": [
+            [10000, "#3B40FF"],
+            [10000, "#00AFFF"],
+            [10000, "#00FFE2"],
+            [10000, "#00FF50"],
+            [10000, "#A000FF"]
+        ] }
+    ]
+}

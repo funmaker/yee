@@ -1,0 +1,9 @@
+{
+    "name": "Entrance",
+    "description": "Who?",
+    "author": "Fun Maker",
+    "steps": [
+        { "power": "off" },
+        { "bulb": "Kek 1", "scene": true, "ct": 4000, "brightness": 100 }
+    ]
+}

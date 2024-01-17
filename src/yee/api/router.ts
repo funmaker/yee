@@ -1,13 +1,13 @@
 import readline from "readline";
 import { PassThrough } from "stream";
-import http from "http";
 import PromiseRouter from "express-promise-router";
 import bodyParser from "body-parser";
 import { Request, Response, NextFunction } from "express";
 import morgan from "morgan";
-import packageJson from "../../../package.json";
-import { ErrorResponse, JustOk, SetNameRequest, StatusResponse } from "../../apiTypes";
+import packageJSON from "../../../package.json" assert { type: "json" };
+import { CommandRequest, CommandResponse, ConnectResponse, DisconnectResponse, ErrorResponse, JustOk, RefreshResponse, StatusResponse } from "../../apiTypes";
 import { config } from "../../config";
+import { parseError } from "../utils";
 import Yee from "../index";
 import HTTPError from "./HTTPError";
 import Api from "./index";
@@ -27,7 +27,7 @@ export default function makeRootRouter(api: Api, yee: Yee) {
   
   router.get<never, StatusResponse>("/", (req, res) => {
     res.json({
-      version: packageJson.version,
+      version: packageJSON.version,
       bulbs: [...yee.bulbs.values()].map(bulb => bulb.serialize()),
     });
   });
@@ -38,61 +38,79 @@ export default function makeRootRouter(api: Api, yee: Yee) {
     res.json({ ok: true });
   });
   
-  router.post<{ bulb: string }, JustOk>("/bulb/:bulb/connect", async (req, res) => {
-    const bulb = yee.findBulb(req.params.bulb);
-    if(!bulb) throw new HTTPError(404, "Bulb not found");
+  router.post<{ bulb: string }, ConnectResponse>("/bulb/:bulb/connect", async (req, res) => {
+    const bulbs = yee.findBulbs(req.params.bulb);
+    if(bulbs.length === 0 && req.params.bulb !== "*") throw new HTTPError(404, "Bulb not found");
     
-    await bulb.connect();
+    const results = await Promise.allSettled(bulbs.filter(bulb => !bulb.connected).map(bulb => bulb.connect()));
     
-    res.json({ ok: true });
+    res.json({
+      success: results.filter(res => res.status === "fulfilled").length,
+      failed: results.filter(res => res.status === "rejected").length,
+      ignored: bulbs.length - results.length,
+      errors: Object.fromEntries(results.flatMap((res, num) => res.status === "rejected" ? [[bulbs[num].id, parseError(res.reason)]] : [])),
+    });
   });
   
-  router.post<{ bulb: string }, JustOk>("/bulb/:bulb/disconnect", async (req, res) => {
-    const bulb = yee.findBulb(req.params.bulb);
-    if(!bulb) throw new HTTPError(404, "Bulb not found");
+  router.post<{ bulb: string }, DisconnectResponse>("/bulb/:bulb/disconnect", async (req, res) => {
+    const bulbs = yee.findBulbs(req.params.bulb);
+    if(bulbs.length === 0 && req.params.bulb !== "*") throw new HTTPError(404, "Bulb not found");
     
-    await bulb.disconnect();
+    const results = await Promise.allSettled(bulbs.filter(bulb => bulb.connected).map(bulb => bulb.disconnect()));
     
-    res.json({ ok: true });
+    res.json({
+      success: results.filter(res => res.status === "fulfilled").length,
+      failed: results.filter(res => res.status === "rejected").length,
+      ignored: bulbs.length - results.length,
+      errors: Object.fromEntries(results.flatMap((res, num) =>
+        res.status === "rejected"
+          ? [[bulbs[num].id, parseError(res.reason)]]
+          : [],
+      )),
+    });
   });
   
-  router.post<{ bulb: string }, JustOk>("/bulb/:bulb/on", async (req, res) => {
-    const bulb = yee.findBulb(req.params.bulb);
-    if(!bulb) throw new HTTPError(404, "Bulb not found");
+  router.post<{ bulb: string }, RefreshResponse>("/bulb/:bulb/refresh", async (req, res) => {
+    const bulbs = yee.findBulbs(req.params.bulb);
+    if(bulbs.length === 0 && req.params.bulb !== "*") throw new HTTPError(404, "Bulb not found");
     
-    await bulb.on();
+    const results = await Promise.allSettled(bulbs.map(bulb => bulb.refresh()));
     
-    res.json({ ok: true });
+    res.json({
+      success: results.filter(res => res.status === "fulfilled").length,
+      failed: results.filter(res => res.status === "rejected").length,
+      results: Object.fromEntries(results.map((res, num) =>
+        res.status === "rejected"
+          ? [bulbs[num].id, parseError(res.reason)]
+          : [bulbs[num].id, res.value],
+      )),
+    });
   });
   
-  router.post<{ bulb: string }, JustOk>("/bulb/:bulb/off", async (req, res) => {
-    const bulb = yee.findBulb(req.params.bulb);
-    if(!bulb) throw new HTTPError(404, "Bulb not found");
+  router.post<{ bulb: string; method: string }, CommandResponse, CommandRequest>("/bulb/:bulb/command/:method", async (req, res) => {
+    if(!Array.isArray(req.body.params)) throw new HTTPError(400, "'params' should be an array");
     
-    await bulb.off();
+    const bulbs = yee.findBulbs(req.params.bulb);
+    if(bulbs.length === 0 && req.params.bulb !== "*") throw new HTTPError(404, "Bulb not found");
     
-    res.json({ ok: true });
-  });
-  
-  router.post<{ bulb: string }, JustOk, SetNameRequest>("/bulb/:bulb/setName", async (req, res) => {
-    const bulb = yee.findBulb(req.params.bulb);
-    if(!bulb) throw new HTTPError(404, "Bulb not found");
+    const results = await Promise.allSettled(bulbs.map(bulb => bulb.command(req.params.method, req.body.params || [])));
     
-    await bulb.setName(req.body.name);
-    
-    res.json({ ok: true });
+    res.json({
+      success: results.filter(res => res.status === "fulfilled").length,
+      failed: results.filter(res => res.status === "rejected").length,
+      results: Object.fromEntries(results.map((res, num) =>
+        res.status === "rejected"
+          ? [bulbs[num].id, parseError(res.reason)]
+          : [bulbs[num].id, res.value],
+      )),
+    });
   });
   
   router.use<never, ErrorResponse>((err: HTTPError, req: Request, res: Response, next: NextFunction) => {
     api.log.error(err);
     
-    const code = err.HTTPcode || 500;
-    const result = {
-      code,
-      message: err.publicMessage || http.STATUS_CODES[code] || "Something Happened",
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    };
-    res.status(code).json(result);
+    const result = parseError(err);
+    res.status(result.code).json(result);
   });
   
   return router;

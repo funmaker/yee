@@ -1,0 +1,9 @@
+{
+    "name": "Cool White",
+    "description": "6000K cool white",
+    "author": "Fun Maker",
+    "steps": [
+        { "power": "on" },
+        { "white": 6000, "duration": 1000 }
+    ]
+}

@@ -1,6 +1,7 @@
 import { createSocket, RemoteInfo } from "dgram";
 import chalk from "chalk";
-import { makeLogger } from "./utils";
+import { config } from "../config";
+import { makeLogger, parseProperties } from "./utils";
 import Yee from "./index";
 
 const searchRequest = encode(
@@ -24,7 +25,13 @@ export default class Discovery {
   });
   
   constructor(private readonly yee: Yee) {
-    this.searchSocket.on("message", (data, remote) => this.onMessage(data, remote));
+    this.searchSocket.on("message", (data, remote) => {
+      try {
+        this.onMessage(data, remote);
+      } catch(err) {
+        this.log.error(err);
+      }
+    });
     
     this.readyPromise = new Promise((res, rej) => {
       this.searchSocket.once("listening", async () => {
@@ -50,54 +57,47 @@ export default class Discovery {
   }
   
   onMessage(data: Buffer, remote: RemoteInfo) {
-    try {
-      this.log.debug(`Got response from ${remote.address}:${remote.port} (${remote.size} bytes)`);
-      const message = decode(data);
-      this.log.debug(message);
-      const lines = message.split("\n");
+    this.log.debug(`Got response from ${remote.address}:${remote.port} (${remote.size} bytes)`);
+    const message = decode(data);
+    this.log.debug(message);
+    const lines = message.split("\n");
+    
+    if(lines[0] === "M-SEARCH * HTTP/1.1") {
+      return;
+    } else if(lines[0] !== "HTTP/1.1 200 OK" && lines[0] !== "NOTIFY * HTTP/1.1") {
+      this.log.debug("Invalid response header. Ignoring...");
+      return;
+    }
+    
+    const properties: Partial<Record<string, string>> = {};
+    
+    for(const line of lines.slice(1)) {
+      if(line === "") continue;
       
-      if(lines[0] === "M-SEARCH * HTTP/1.1") {
-        return;
-      } else if(lines[0] !== "HTTP/1.1 200 OK" && lines[0] !== "NOTIFY * HTTP/1.1") {
-        this.log.debug("Invalid response header. Ignoring...");
-        return;
-      }
-      
-      const properties: Partial<Record<string, string>> = {};
-      
-      for(const line of lines.slice(1)) {
-        if(line === "") continue;
-        
-        const separator = line.indexOf(": ");
-        if(separator < 0) {
-          this.log.debug(`Invalid response line '${line}'. Ignoring...`);
-          return;
-        }
-        
-        properties[line.slice(0, separator).toLowerCase()] = line.slice(separator + 2);
-      }
-      
-      if(!properties.id) {
-        this.log.warn(`Missing ID in request from ${remote.address}:${remote.port}. Ignoring...`);
+      const separator = line.indexOf(": ");
+      if(separator < 0) {
+        this.log.debug(`Invalid response line '${line}'. Ignoring...`);
         return;
       }
       
-      this.yee.upsertBulb(properties.id, {
-        name: properties.name,
-        location: properties.location,
-        model: properties.model,
-        fwVer: properties.fw_ver,
-        support: properties.support?.split(" "),
-        power: properties.power ? properties.power === "on" : undefined,
-        bright: properties.bright ? parseInt(properties.bright) : undefined,
-        colorMode: properties.colorMode ? parseInt(properties.colorMode) : undefined,
-        ct: properties.ct ? parseInt(properties.ct) : undefined,
-        rgb: properties.rgb ? parseInt(properties.rgb) : undefined,
-        hue: properties.hue ? parseInt(properties.hue) : undefined,
-        sat: properties.sat ? parseInt(properties.sat) : undefined,
-      });
-    } catch(err) {
-      this.log.error(err);
+      properties[line.slice(0, separator).toLowerCase()] = line.slice(separator + 2);
+    }
+    
+    if(!properties.id) {
+      this.log.warn(`Missing ID in request from ${remote.address}:${remote.port}. Ignoring...`);
+      return;
+    }
+    
+    this.yee.upsertBulb(properties.id, parseProperties(properties));
+    
+    if(config.autoConnect) {
+      const bulb = this.yee.bulbs.get(properties.id);
+      if(bulb) {
+        bulb.connect().catch(err => {
+          this.log.error("Bulb auto connect failed:");
+          this.log.error(err);
+        });
+      }
     }
   }
 }

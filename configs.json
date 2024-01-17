@@ -1,0 +1,13 @@
+{
+    "verbose": false,
+    "host": "127.0.0.1",
+    "port": 3900,
+    "presets": "./presets",
+    "state": "./state.json",
+    "reconnect": 10,
+    "autoConnect": true,
+    "startConnect": true,
+    "reconnectDelay": 10000,
+    "connectionTimeout": 20000,
+    "requestTimeout": 10000
+}
